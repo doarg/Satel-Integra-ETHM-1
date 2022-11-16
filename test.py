@@ -146,33 +146,91 @@ data = {
             'meaning': 'INT-RS/ETHM-1 module version',
             'bytes': 12,
             'answer': {
-                'version': 11,
-                'module': 1
+                'Version:': 11,
+                'Module:': 1 # INT-GSM module as addition
             }
         },
-        '7D': {
-        
+        '7E': {
+            'meaning': 'INTEGRA version',
+            'bytes': 14,
+            'answer': {
+                'Type:': 1,
+                'V:': 11,
+                'Language:': 1,
+                'settings stored in FLASH:': 1
+            },
+            'type': {
+                0: 'INTEGRA 24',
+                1: 'INTEGRA 32',
+                2: 'INTEGRA 64',
+                3: 'INTEGRA 128',
+                4: 'INTEGRA 128-WRL SIM300',
+                66: 'INTEGRA 64 PLUS',
+                67: 'INTEGRA 128 PLUS',
+                72: 'INTEGRA 256 PLUS',
+                132: 'INTEGRA 128-WRL LEON'
+            },
+            'languages': {
+                0: {
+                    'code': 'PL',
+                    'name': 'Poland'
+                },
+                9: {
+                    'code': 'NL',
+                    'name': 'Netherlands'
+                }
+            }
         }
-    }
+    },
+
 }
-print(data['cmd']['7C']['meaning'])
-print(data['cmd']['7C']['bytes'])
+# print(data['cmd']['7C']['meaning'])
+# print(data['cmd']['7C']['bytes'])
 
 
 
 
-# tonen van alle versie gegevens
-r = binascii.hexlify(connect(makeCMD('7C'))).decode("utf-8")[4:-10] # INT-RS/ETHM-1 module version
-print(r)
-cmd = r[0] + r[1]
-v = binascii.a2b_hex(r[2:-14]).decode("utf-8")
-d = binascii.a2b_hex(r[2:]).decode("utf-8")[3:]
+def send(cmd):
+    r = binascii.hexlify(connect(makeCMD(cmd.upper()))).decode("utf-8")[4:-8] # INT-RS/ETHM-1 module version
+    # print(r) # 7c323039323032323033313803
+    cmd = r[0] + r[1]
+    # print(cmd)
+    getdata = data['cmd'][cmd.upper()]
+    print(getdata['meaning'])
+    # print(r)
+    # print(getdata['bytes'])
+    
 
-print('cmd:    ' + cmd)
-print('versie: ' + v)
-print('datum:  ' + d)
+    r = r[2:]
+    # print(r)
+    for name in getdata['answer']:
+        charters = getdata['answer'][name] * 2
+
+        if charters > 2:
+            out = binascii.a2b_hex(r[:charters]).decode("utf-8")
+        else:
+            out = int(r[:charters], base=16)
+        
+        print(name + str(out))
+        r = r[charters:]
+
+
+
+    print('')
+    print('')
+
+
+    # v = binascii.a2b_hex(r[2:-14]).decode("utf-8")
+    # d = binascii.a2b_hex(r[2:]).decode("utf-8")[3:]
+
+    # print('cmd:    ' + cmd)
+    # print('versie: ' + v)
+    # print('datum:  ' + d)
 
 
 
 
-# print(binascii.a2b_hex(r).decode("utf-8"))
+    # print(binascii.a2b_hex(r).decode("utf-8"))
+
+send('7C')
+send('7E')
