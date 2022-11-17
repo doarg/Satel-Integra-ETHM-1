@@ -4,28 +4,35 @@
 #   Example Satel Integra ETHM-1 module TCP/IP connection
 #
 
-import socket
-import binascii
+import binascii, socket
+
+
+# test setting
+host = "10.0.1.248"
+port = 7094
+
+
+# user input
+# default_host = "10.0.1.248"
+# default_port = 7094
+# host = input("[+] Enter IP of Satel Integra ETHM-1 (default = " + default_host + "): ") or default_host
+# port = int(input("[+] Enter Port number of " + host + " (default = " + str(default_port) + "): ") or default_port)
 
 
 def connect(cmd):
-
-    # testopstelling
-    host = "10.0.1.248"
-    port = 7094
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((host, port))
-        s.sendall(cmd)
-        data = s.recv(1024)
-
-    return data
-
+        try:
+            s.connect((host, port))
+            s.sendall(cmd)
+            data = s.recv(1024)
+        except socket.error as e: 
+            print("%s" % e) 
+            sys.exit(1)
+        return data
 
 def hexToBin(hex):
     res = "{0:08b}".format(int(hex, 16))
     return str(res)
-
 
 def leftRotate(st):
     n0 = st[0]
@@ -38,24 +45,19 @@ def leftRotate(st):
     n7 = st[7]
     return n1+n2+n3+n4+n5+n6+n7+n0
 
-
 def binToHex(bin):
     return hex(int(bin, 2))
-
 
 def makeCRC16():
     nr1 = "14"
     nr2 = "7A"
-
     out1 = binToHex(leftRotate(hexToBin(nr1)))
     out2 = binToHex(leftRotate(hexToBin(nr2)))
     a = int(out1[2] + out1[3] + out2[2] + out2[3], 16)
     b = 0xffff
     return hex(a ^ b)
 
-
 def makeCRC32(crc16):
-    # print(crc16)
     var1 = crc16[2] + crc16[3]
     var2 = crc16[4] + crc16[5]
     hout1 = binToHex(leftRotate(hexToBin(var1)))
@@ -64,7 +66,6 @@ def makeCRC32(crc16):
     b = 0xffff
     return hex(a ^ b)
         
-
 def makeCMD(cmd, cmd2=''):
     retour = makeCRC16() 
     CRChigh = retour[2] + retour[3]
@@ -82,18 +83,15 @@ def makeCMD(cmd, cmd2=''):
         somcmd2 = int('0x' + cmd2, 0)
         som2 = retour2 + somhigh2 + somcmd2
         som_hex2 = hex(som2)
-
         CRChigh2 = som_hex2[2] + som_hex2[3]
         CRClow2 = som_hex2[4] + som_hex2[5]
 
         s1 = binascii.unhexlify('FE')
         s2 = binascii.unhexlify('FE')
-
-        d1 = binascii.unhexlify(cmd) # cmd
-        d2 = binascii.unhexlify(cmd2) # cmd2
-        d3 = binascii.unhexlify(CRChigh2) # CRChigh
-        d4 = binascii.unhexlify(CRClow2) # CRClow
-
+        d1 = binascii.unhexlify(cmd)
+        d2 = binascii.unhexlify(cmd2)
+        d3 = binascii.unhexlify(CRChigh2)
+        d4 = binascii.unhexlify(CRClow2)
         e1 = binascii.unhexlify('FE')
         e2 = binascii.unhexlify('0D')
         cmd = s1+s2+d1+d2+d3+d4+e1+e2
@@ -104,21 +102,49 @@ def makeCMD(cmd, cmd2=''):
 
         s1 = binascii.unhexlify('FE')
         s2 = binascii.unhexlify('FE')
-
-        d1 = binascii.unhexlify(cmd) # cmd
-        d2 = binascii.unhexlify(CRChigh) # CRChigh
-        d3 = binascii.unhexlify(CRClow) # CRClow
-
+        d1 = binascii.unhexlify(cmd)
+        d2 = binascii.unhexlify(CRChigh)
+        d3 = binascii.unhexlify(CRClow)
         e1 = binascii.unhexlify('FE')
         e2 = binascii.unhexlify('0D')
         cmd = s1+s2+d1+d2+d3+e1+e2
         return cmd
 
 
-# version
-# print(binascii.hexlify(connect(makeCMD('7C')))) # INT-RS/ETHM-1 module version
-# print(binascii.hexlify(connect(makeCMD('7E')))) # INTEGRA version
 
+data = {
+    'cmd': {
+        '7C':{'meaning':'INT-RS/ETHM-1 module version','bytes':12,'answer':{'Version :':11,'Module  :':1}},
+        '7E':{'meaning':'INTEGRA version','bytes':14,'answer':{'Type    :':1,'Version :':11,'Language:':1,'settings stored in FLASH:':1}}
+    },
+    'type': {0:'INTEGRA 24',1:'INTEGRA 32',2:'INTEGRA 64',3:'INTEGRA 128',4:'INTEGRA 128-WRL SIM300',66:'INTEGRA 64 PLUS',67:'INTEGRA 128 PLUS',72:'INTEGRA 256 PLUS',132:'INTEGRA 128-WRL LEON'},
+    'languages': {
+        0:{'code':'PL','name':'Poland'},
+        9:{'code':'NL','name':'Netherlands'}
+    }
+}
+
+
+def send(cmd):
+    print('')
+    r = binascii.hexlify(connect(makeCMD(cmd.upper()))).decode("utf-8")[4:-8]
+    cmd = r[0] + r[1]
+
+    getdata = data['cmd'][cmd.upper()]
+    print("[+] " + getdata['meaning'])
+    r = r[2:] # remove cmd
+    for name in getdata['answer']:
+        charters = getdata['answer'][name] * 2
+        if charters > 2:
+            out = binascii.a2b_hex(r[:charters]).decode("utf-8")
+        else:
+            out = int(r[:charters], base=16)
+        print(name + ' ' + str(out))
+        r = r[charters:]
+
+# version
+send('7C')
+send('7E')
 
 # # 32 BIT
 # print(binascii.hexlify(connect(makeCMD('00', 'ff')))) # zones violation
@@ -140,97 +166,5 @@ def makeCMD(cmd, cmd2=''):
 
 
 
-data = {
-    'cmd': {
-        '7C': {
-            'meaning': 'INT-RS/ETHM-1 module version',
-            'bytes': 12,
-            'answer': {
-                'Version:': 11,
-                'Module:': 1 # INT-GSM module as addition
-            }
-        },
-        '7E': {
-            'meaning': 'INTEGRA version',
-            'bytes': 14,
-            'answer': {
-                'Type:': 1,
-                'V:': 11,
-                'Language:': 1,
-                'settings stored in FLASH:': 1
-            },
-            'type': {
-                0: 'INTEGRA 24',
-                1: 'INTEGRA 32',
-                2: 'INTEGRA 64',
-                3: 'INTEGRA 128',
-                4: 'INTEGRA 128-WRL SIM300',
-                66: 'INTEGRA 64 PLUS',
-                67: 'INTEGRA 128 PLUS',
-                72: 'INTEGRA 256 PLUS',
-                132: 'INTEGRA 128-WRL LEON'
-            },
-            'languages': {
-                0: {
-                    'code': 'PL',
-                    'name': 'Poland'
-                },
-                9: {
-                    'code': 'NL',
-                    'name': 'Netherlands'
-                }
-            }
-        }
-    },
-
-}
-# print(data['cmd']['7C']['meaning'])
-# print(data['cmd']['7C']['bytes'])
 
 
-
-
-def send(cmd):
-    r = binascii.hexlify(connect(makeCMD(cmd.upper()))).decode("utf-8")[4:-8] # INT-RS/ETHM-1 module version
-    # print(r) # 7c323039323032323033313803
-    cmd = r[0] + r[1]
-    # print(cmd)
-    getdata = data['cmd'][cmd.upper()]
-    print(getdata['meaning'])
-    # print(r)
-    # print(getdata['bytes'])
-    
-
-    r = r[2:]
-    # print(r)
-    for name in getdata['answer']:
-        charters = getdata['answer'][name] * 2
-
-        if charters > 2:
-            out = binascii.a2b_hex(r[:charters]).decode("utf-8")
-        else:
-            out = int(r[:charters], base=16)
-        
-        print(name + str(out))
-        r = r[charters:]
-
-
-
-    print('')
-    print('')
-
-
-    # v = binascii.a2b_hex(r[2:-14]).decode("utf-8")
-    # d = binascii.a2b_hex(r[2:]).decode("utf-8")[3:]
-
-    # print('cmd:    ' + cmd)
-    # print('versie: ' + v)
-    # print('datum:  ' + d)
-
-
-
-
-    # print(binascii.a2b_hex(r).decode("utf-8"))
-
-send('7C')
-send('7E')
